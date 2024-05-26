@@ -5,6 +5,12 @@ import App from './App';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import reportWebVitals from './reportWebVitals';
 
+declare const particlesJS: any;
+
+particlesJS.load('particles-js', 'assets/particles.json', function() {
+  console.log('callback - particles.js config loaded');
+});
+
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
