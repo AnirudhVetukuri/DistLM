@@ -6,10 +6,11 @@ import torch.nn as nn
 from training import run_training
 from torchvision import datasets, transforms
 
-def input_thread(stop_event):
+def input_thread(stop_event, start_event):
     while not stop_event.is_set():
         user_input = input("Type 'start' to begin training or 'status' to see connected devices: ").strip().lower()
         if user_input == 'start':
+            start_event.set()
             stop_event.set()
         elif user_input == 'status':
             devices = get_devices()
@@ -21,15 +22,16 @@ def main():
     # Start device discovery
     start_discovery()
 
-    # Create an event to stop the input thread
+    # Create events to stop the input thread and to start training
     stop_event = threading.Event()
+    start_event = threading.Event()
 
     # Start the input thread
-    input_thread_instance = threading.Thread(target=input_thread, args=(stop_event,))
+    input_thread_instance = threading.Thread(target=input_thread, args=(stop_event, start_event))
     input_thread_instance.start()
 
     # Wait for the user to trigger the start event
-    while not stop_event.is_set():
+    while not start_event.is_set():
         time.sleep(1)
 
     # Get the list of discovered devices
@@ -85,6 +87,10 @@ def main():
     # Define the dataset
     transform = transforms.Compose([transforms.ToTensor()])
     dataset = datasets.FakeData(transform=transform)  # Using FakeData for simplicity
+
+    # Notify all devices to start training
+    with open("start_training.txt", "w") as f:
+        f.write("start")
 
     # Run distributed training
     run_training(world_size, model, dataset)

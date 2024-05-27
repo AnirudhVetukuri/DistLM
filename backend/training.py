@@ -1,5 +1,6 @@
 # training.py
 import os
+import time
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
@@ -27,11 +28,16 @@ def main_worker(rank, world_size, model, dataset, epochs=5):
     
     criterion = nn.CrossEntropyLoss().to(device)
     optimizer = optim.SGD(ddp_model.parameters(), lr=0.01)
-    
+
+    print(f"Rank {rank} waiting for start signal")
+    while not os.path.exists("start_training.txt"):
+        time.sleep(1)
+    print(f"Rank {rank} received start signal")
+
     for epoch in range(epochs):
         train_sampler.set_epoch(epoch)
         for batch_idx, (data, target) in enumerate(train_loader):
-            data = data.to(device)
+            data = data.view(data.size(0), -1).to(device) if data.dim() > 2 else data.to(device)
             target = target.to(device)
             optimizer.zero_grad()
             output = ddp_model(data)
@@ -40,7 +46,7 @@ def main_worker(rank, world_size, model, dataset, epochs=5):
             optimizer.step()
             if batch_idx % 10 == 0:
                 print(f'Rank {rank}, Epoch {epoch}, Batch {batch_idx}, Loss {loss.item()}')
-    
+
     cleanup()
 
 def run_training(world_size, model, dataset, epochs=5):
