@@ -24,7 +24,7 @@ def listen_for_devices():
     while True:
         data, addr = sock.recvfrom(1024)
         devices.add(addr[0])
-        print(f'Device discovered: {addr[0]}')
+        #print(f'Device discovered: {addr[0]}')
     
 def start_discovery():
     thread = threading.Thread(target=broadcast_presence)
