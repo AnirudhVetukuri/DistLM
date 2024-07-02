@@ -3,6 +3,8 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List
 from uuid import uuid4
+from ray_module.ray_setup import initialize_ray
+from ray_module.train import train_model
 
 app = FastAPI()
 
@@ -23,7 +25,7 @@ devices: List[Device] = []
 tasks: List[Task] = []
 task_results = {}
 
-ray.init()
+initialize_ray()
 
 @app.get("/")
 def read_root():
@@ -37,11 +39,6 @@ def register_device(device: Device):
 @app.get("/devices")
 def list_devices():
     return devices
-
-@ray.remote
-def train_model(model_architecture, dataset):
-    # Implement the training logic here
-    return f"Training {model_architecture} on {dataset}"
 
 @app.post("/tasks/submit")
 def submit_task(task: Task):
