@@ -1,12 +1,17 @@
 import ray
-from fastapi import FastAPI
+from fastapi import FastAPI, File, UploadFile
 from pydantic import BaseModel
 from typing import List
 from uuid import uuid4
 from ray_module.ray_setup import initialize_ray
 from ray_module.train import train_model
+import os
 
 app = FastAPI()
+
+UPLOAD_DIR = "uploads"
+os.makedirs(f"{UPLOAD_DIR}/models", exist_ok=True)
+os.makedirs(f"{UPLOAD_DIR}/datasets", exist_ok=True)
 
 class Device(BaseModel):
     id: str
@@ -63,6 +68,20 @@ def get_task_status(task_id: str):
         return {"task_id": task_id, "status": "completed", "result": result}
     except ray.exceptions.GetTimeoutError:
         return {"task_id": task_id, "status": "in progress"}
+
+@app.post("/upload/model/")
+async def upload_model(file: UploadFile = File(...)):
+    file_location = f"{UPLOAD_DIR}/models/{file.filename}"
+    with open(file_location, "wb+") as file_object:
+        file_object.write(file.file.read())
+    return {"info": f"Model '{file.filename}' uploaded successfully"}
+
+@app.post("/upload/dataset/")
+async def upload_dataset(file: UploadFile = File(...)):
+    file_location = f"{UPLOAD_DIR}/datasets/{file.filename}"
+    with open(file_location, "wb+") as file_object:
+        file_object.write(file.file.read())
+    return {"info": f"Dataset '{file.filename}' uploaded successfully"}
 
 if __name__ == "__main__":
     import uvicorn
