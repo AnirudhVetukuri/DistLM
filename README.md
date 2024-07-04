@@ -117,8 +117,7 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 
 ## Contact
 
-For questions, issues, or contributions, please open an issue on the GitHub repository or contact the maintainers directly.
-
+For questions, issues, or contributions, please open an issue on the GitHub repository or contact Abhi Vetukuri or Anir Vetukuri.
 ---
 
 DistLM - Empowering distributed training for Large Language Models
