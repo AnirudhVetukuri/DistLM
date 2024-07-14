@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 from .training import DistributedTrainer
 from .resource_manager import ResourceManager
+from .data_handler import DistributedDataHandler
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -19,6 +20,7 @@ class JobScheduler:
             "failed": []
         }
         self.trainers: Dict[str, DistributedTrainer] = {}
+        self.data_handlers: Dict[str, DistributedDataHandler] = {}
 
     async def submit_job(self, job_config: Dict[str, Any]) -> str:
         """Submit a new training job"""
@@ -43,6 +45,10 @@ class JobScheduler:
                 logger.error(f"Failed to allocate resources for job {job_id}")
                 self.job_queues["failed"].append(job_id)
                 return job_id
+
+            # Initialize data handler
+            data_handler = DistributedDataHandler.remote(job_config.get("data_config", {}))
+            self.data_handlers[job_id] = data_handler
 
             # Initialize trainer
             trainer = DistributedTrainer.remote(job_config.get("model_config", {}))
@@ -72,17 +78,24 @@ class JobScheduler:
         """Start training process for a job"""
         try:
             trainer = self.trainers[job_id]
+            data_handler = self.data_handlers[job_id]
             
-            # Get training data configuration
-            data_config = job_config.get("data_config", {})
+            # Get training configuration
             optimizer_config = job_config.get("optimizer_config", {})
+            num_epochs = job_config.get("num_epochs", 1)
+            
+            # Get data loaders
+            train_loader = ray.get(data_handler.get_data_loader.remote("train"))
+            val_loader = None
+            if job_config.get("data_config", {}).get("use_validation", False):
+                val_loader = ray.get(data_handler.get_data_loader.remote("validation"))
             
             # Training loop
-            for epoch in range(job_config.get("num_epochs", 1)):
+            for epoch in range(num_epochs):
                 epoch_losses = []
                 
                 # Process batches
-                for batch in self._get_data_batches(data_config):
+                for batch in train_loader:
                     result = ray.get(trainer.train_batch.remote(batch, optimizer_config))
                     
                     if "error" in result:
@@ -91,10 +104,13 @@ class JobScheduler:
                     epoch_losses.append(result["loss"])
                 
                 # Validation
-                if data_config.get("validation_data"):
-                    val_result = ray.get(trainer.validate.remote(data_config["validation_data"]))
-                    if "error" in val_result:
-                        raise Exception(val_result["error"])
+                if val_loader:
+                    val_losses = []
+                    for batch in val_loader:
+                        val_result = ray.get(trainer.validate.remote(batch))
+                        if "error" in val_result:
+                            raise Exception(val_result["error"])
+                        val_losses.append(val_result["val_loss"])
                 
                 # Save checkpoint
                 if job_config.get("checkpoint_path"):
@@ -106,12 +122,6 @@ class JobScheduler:
         except Exception as e:
             logger.error(f"Error in training job {job_id}: {str(e)}")
             self._complete_job(job_id, "failed", error=str(e))
-
-    def _get_data_batches(self, data_config: Dict[str, Any]):
-        """Generator for data batches"""
-        # This is a placeholder - implement actual data loading logic
-        # You might want to use PyTorch DataLoader or custom data loading
-        return []
 
     def _complete_job(self, job_id: str, status: str, error: Optional[str] = None):
         """Handle job completion"""
@@ -130,9 +140,11 @@ class JobScheduler:
                 self.job_queues["running"].remove(job_id)
             self.job_queues[status].append(job_id)
 
-            # Clean up trainer
+            # Clean up
             if job_id in self.trainers:
                 del self.trainers[job_id]
+            if job_id in self.data_handlers:
+                del self.data_handlers[job_id]
 
     def get_job_status(self, job_id: str) -> Dict[str, Any]:
         """Get current status of a job"""
