@@ -2,114 +2,183 @@
 
 ## Overview
 
-DistLM is a powerful distributed training framework designed for Large Language Models (LLMs) using Ray. It provides a scalable and efficient solution for training LLMs across multiple devices, leveraging the distributed computing capabilities of Ray.
+DistLM is a distributed training framework designed for Large Language Models (LLMs) using Ray. It enables users to share compute resources and earn tokens, which can be used to access larger compute clusters for training. The system implements a token-based economy where users can contribute idle compute resources to earn tokens and spend them on training their own models.
 
 ## Features
 
-- **Distributed Training**: Utilize multiple devices for parallel training of LLMs.
-- **Ray Integration**: Leverage Ray's distributed computing framework for efficient task distribution and execution.
-- **FastAPI Backend**: Robust API for device registration, task submission, and status monitoring.
-- **Model and Dataset Management**: Easy upload and management of custom models and datasets.
-- **React Frontend**: User-friendly interface for interacting with the training system.
-- **Flexible Model Support**: Compatible with various LLM architectures, including LLaMA.
+### Core Infrastructure
+- Distributed training using PyTorch and Ray
+- Support for transformer models via HuggingFace
+- Automatic resource allocation and scheduling
+- Token-based compute sharing economy
+- Node health monitoring and management
+
+### Training Capabilities
+- Multi-GPU training support
+- Automatic data preprocessing and batching
+- Support for custom datasets and HuggingFace datasets
+- Checkpoint management and model state synchronization
+- Training progress monitoring and metrics collection
+
+### Security
+- JWT-based authentication
+- Role-based access control (User, Node Owner, Admin)
+- Protected API endpoints
+- Secure token management
+
+### Monitoring
+- Real-time training metrics
+- Node health monitoring
+- Resource usage tracking
+- System-wide metrics collection
 
 ## System Architecture
 
-DistLM consists of the following main components:
+### Backend Components
 
-1. **Backend API** (`main.py`): FastAPI-based server handling device registration, task submission, and status queries.
-2. **Ray Setup** (`ray_setup.py`): Configures and initializes the Ray cluster for distributed computing.
-3. **Training Module** (`train.py`): Implements the distributed training logic using Ray.
-4. **Data Loader** (`dataloader.py`): Handles loading and preprocessing of datasets.
-5. **Model Loader** (`model.py`): Manages loading and initialization of LLM models.
-6. **Frontend** (`App.tsx`): React-based user interface for interacting with the system.
+1. **API Layer** (`app/main.py`)
+   - FastAPI-based REST API
+   - Authentication and authorization
+   - Request handling and routing
+   - Error handling
+
+2. **Training Infrastructure** (`ray_module/`)
+   - `training.py`: Distributed training implementation
+   - `scheduler.py`: Job scheduling and management
+   - `data_handler.py`: Data loading and preprocessing
+   - `resource_manager.py`: Compute resource management
+
+3. **Security** (`auth/`)
+   - `auth_handler.py`: Authentication and authorization
+   - JWT token management
+   - User management
+   - Role-based permissions
+
+4. **Monitoring** (`monitoring/`)
+   - `metrics.py`: Metrics collection and storage
+   - System monitoring
+   - Training progress tracking
+   - Resource usage monitoring
 
 ## Installation
 
 1. Clone the repository:
-   ```
+   ```bash
    git clone https://github.com/yourusername/DistLM.git
    cd DistLM
    ```
 
-2. Install the required Python packages:
-   ```
-   pip install -r requirements.txt
+2. Install dependencies:
+   ```bash
+   pip install -r backend/requirements.txt
    ```
 
-3. Install Node.js and npm (for the frontend).
-
-4. Install frontend dependencies:
-   ```
-   cd frontend
-   npm install
+3. Set up environment variables:
+   ```bash
+   cp backend/.env.example backend/.env
+   # Edit .env with your configuration
    ```
 
 ## Usage
 
 ### Starting the Backend
 
-1. Navigate to the project root directory.
-2. Run the FastAPI server:
-   ```
-   uvicorn main:app --host 0.0.0.0 --port 8000
-   ```
-
-### Starting the Frontend
-
-1. Navigate to the `frontend` directory.
-2. Start the React development server:
-   ```
-   npm start
+1. Start the FastAPI server:
+   ```bash
+   cd backend
+   uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
    ```
 
-### API Endpoints
+### User Management
 
-- `POST /devices/register`: Register a new device for distributed training.
-- `GET /devices`: List all registered devices.
-- `POST /tasks/submit`: Submit a new training task.
-- `GET /tasks`: List all submitted tasks.
-- `GET /tasks/{task_id}/status`: Check the status of a specific task.
-- `POST /upload/model/`: Upload a custom model file.
-- `POST /upload/dataset/`: Upload a custom dataset file.
+1. Register a new user (requires admin):
+   ```bash
+   curl -X POST "http://localhost:8000/auth/register" \
+     -H "Authorization: Bearer $TOKEN" \
+     -d '{"username": "user1", "password": "pass123", "role": "node_owner"}'
+   ```
 
-### Distributed Training
+2. Login:
+   ```bash
+   curl -X POST "http://localhost:8000/auth/token" \
+     -d "username=user1&password=pass123"
+   ```
 
-1. Register available devices using the `/devices/register` endpoint.
-2. Upload your model and dataset using the respective upload endpoints.
-3. Submit a training task via the `/tasks/submit` endpoint, specifying the model, dataset, and devices to use.
-4. Monitor the task status using the `/tasks/{task_id}/status` endpoint.
+### Node Management
 
-## Development
+1. Register a compute node:
+   ```bash
+   curl -X POST "http://localhost:8000/nodes/register" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "hostname": "gpu-node-1",
+       "resources": {
+         "gpu": 1,
+         "cpu_cores": 8,
+         "memory": 32
+       }
+     }'
+   ```
 
-### Running Tests
+### Training Jobs
 
-Execute the test suite to ensure system integrity:
+1. Submit a training job:
+   ```bash
+   curl -X POST "http://localhost:8000/jobs/submit" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "model_config": {
+         "type": "simple_transformer",
+         "model_name": "gpt2"
+       },
+       "data_config": {
+         "data_source": "huggingface",
+         "dataset_name": "wikitext"
+       },
+       "requirements": {
+         "gpu": 1,
+         "cpu_cores": 4,
+         "memory": 16
+       }
+     }'
+   ```
 
-```
-pytest test_main.py test_ray.py
-```
+## API Documentation
 
-### Adding New Models
+### Authentication Endpoints
+- `POST /auth/token`: Get JWT access token
+- `POST /auth/register`: Register new user (admin only)
 
-To add support for new LLM architectures:
+### Node Management
+- `POST /nodes/register`: Register compute node
+- `GET /nodes`: List all nodes
+- `POST /nodes/{node_id}/heartbeat`: Update node status
 
-1. Modify `model.py` to include the new model loading logic.
-2. Update `train.py` to handle the training process for the new model type.
+### Job Management
+- `POST /jobs/submit`: Submit training job
+- `GET /jobs/{job_id}`: Get job status
+- `GET /jobs`: List all jobs
+- `POST /jobs/{job_id}/cancel`: Cancel job
 
-### Extending the Frontend
+### Token Management
+- `GET /tokens/balance/{user_id}`: Get token balance
+- `GET /tokens/history/{user_id}`: Get compute history
+- `POST /tokens/estimate`: Estimate compute cost
 
-The React-based frontend (`App.tsx`) can be extended to add new features or improve the user interface. Ensure to update the corresponding API calls in the frontend when modifying the backend.
+### Monitoring
+- `GET /metrics/training/{job_id}`: Get training metrics
+- `GET /metrics/node/{node_id}`: Get node metrics
+- `GET /metrics/system`: Get system-wide metrics
 
 ## Contributing
 
-We welcome contributions to DistLM! Please follow these steps to contribute:
-
-1. Fork the repository.
-2. Create a new branch for your feature or bug fix.
-3. Implement your changes, ensuring to follow the existing code style.
-4. Write or update tests as necessary.
-5. Submit a pull request with a clear description of your changes.
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a new Pull Request
 
 ## License
 
